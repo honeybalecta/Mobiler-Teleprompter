@@ -44,16 +44,28 @@
   }
   #video {
     position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; transform: scaleX(-1); /* Spiegeln für Frontkamera */
+    object-fit: cover;
+    transform: scaleX(-1) translateZ(0); /* Spiegeln + GPU-Layer */
+    will-change: transform;
+    backface-visibility: hidden;
   }
-  #video.back { transform: none; }
+  #video.back { transform: translateZ(0); }
 
   #textOverlay {
     position: absolute; left: 0; right: 0; top: 15%; bottom: 25%;
     overflow: hidden; pointer-events: none;
     background: rgba(0,0,0,0.35);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
-            mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  }
+  /* Günstige Fade-Kanten statt mask-image (mobile Compositor-freundlich) */
+  #textOverlay::before, #textOverlay::after {
+    content: ''; position: absolute; left: 0; right: 0; height: 40px;
+    pointer-events: none; z-index: 2;
+  }
+  #textOverlay::before {
+    top: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.35), transparent);
+  }
+  #textOverlay::after {
+    bottom: 0; background: linear-gradient(to top, rgba(0,0,0,0.35), transparent);
   }
   #textScroll {
     position: absolute; left: 0; right: 0;
@@ -100,8 +112,7 @@
   .ctrl {
     flex: 1; padding: 14px; border-radius: 10px; border: none;
     font-size: 15px; font-weight: 600; cursor: pointer;
-    background: rgba(255,255,255,0.15); color: #fff;
-    backdrop-filter: blur(10px);
+    background: rgba(40,40,40,0.85); color: #fff;
   }
   .ctrl.rec { background: #e53935; }
   .ctrl.stop { background: #555; }
@@ -230,6 +241,22 @@ $('startBtn').onclick = async () => {
     video.srcObject = stream;
     video.classList.toggle('back', camFacing === 'environment');
 
+    // Video-Watchdog: falls der Browser die Preview drosselt oder pausiert,
+    // sofort wieder starten. Auch bei Sichtbarkeits-/Fokuswechseln.
+    const ensurePlaying = () => {
+      if (video.paused || video.readyState < 2) {
+        video.play().catch(() => {});
+      }
+    };
+    video.addEventListener('pause', ensurePlaying);
+    video.addEventListener('stalled', ensurePlaying);
+    video.addEventListener('suspend', ensurePlaying);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) ensurePlaying();
+    });
+    // Sicherheitsnetz: alle 2s prüfen
+    window._playWatchdog = setInterval(ensurePlaying, 2000);
+
     // Startposition: Text beginnt auf Lesezeile (Mitte Overlay)
     const overlay = $('textOverlay');
     scrollY = overlay.clientHeight / 2;
@@ -346,6 +373,7 @@ $('delBtn').onclick = () => {
 $('finishBtn').onclick = async () => {
   if (recordedSegments.length === 0) return;
   cancelAnimationFrame(rafId);
+  if (window._playWatchdog) { clearInterval(window._playWatchdog); window._playWatchdog = null; }
   stream.getTracks().forEach(t => t.stop());
 
   // Segmente zusammenfügen (einfache Blob-Konkatenation funktioniert bei webm/mp4 mit gleichem Codec meistens)
@@ -376,6 +404,7 @@ $('restartBtn').onclick = cleanupAndReset;
 
 function cleanupAndReset() {
   cancelAnimationFrame(rafId);
+  if (window._playWatchdog) { clearInterval(window._playWatchdog); window._playWatchdog = null; }
   if (stream) stream.getTracks().forEach(t => t.stop());
   recordedSegments = [];
   isRecording = false;
