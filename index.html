@@ -45,7 +45,7 @@
   #video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover;
-    transform: scaleX(-1) translateZ(0); /* Spiegeln + GPU-Layer */
+    transform: scaleX(-1) translateZ(0);
     will-change: transform;
     backface-visibility: hidden;
   }
@@ -56,7 +56,6 @@
     overflow: hidden; pointer-events: none;
     background: rgba(0,0,0,0.35);
   }
-  /* Günstige Fade-Kanten statt mask-image (mobile Compositor-freundlich) */
   #textOverlay::before, #textOverlay::after {
     content: ''; position: absolute; left: 0; right: 0; height: 40px;
     pointer-events: none; z-index: 2;
@@ -131,7 +130,6 @@
 </head>
 <body>
 
-<!-- ===== SETUP ===== -->
 <div id="setup">
   <h1>📝 Teleprompter</h1>
   <div>
@@ -163,7 +161,6 @@
   <p class="info">Tipp: Tempo kannst du während der Aufnahme jederzeit anpassen. Nach „Pause" kannst du das letzte Segment verwerfen und die Stelle neu einsprechen — der Text springt automatisch zurück.</p>
 </div>
 
-<!-- ===== PROMPTER ===== -->
 <div id="prompter">
   <video id="video" autoplay playsinline muted></video>
   <div id="textOverlay">
@@ -190,7 +187,6 @@
   </div>
 </div>
 
-<!-- ===== FINISH ===== -->
 <div id="finish">
   <h1>✓ Fertig</h1>
   <video id="previewVideo" controls></video>
@@ -207,16 +203,15 @@ const video = $('video'), textScroll = $('textScroll');
 // ===== State =====
 let stream = null;
 let mediaRecorder = null;
-let recordedSegments = []; // { blob, textPosAtStart }
+let recordedSegments = []; 
 let currentChunks = [];
 let isRecording = false;
 let mimeType = '';
 
-let scrollY = 0;         // aktuelle Text-Position (px)
-let scrollSpeed = 40;    // px/s
-let currentAnim = null;  // laufende Web Animation
-let animStartY = 0;
-let animStartTime = 0;
+let scrollY = 0;         
+let scrollSpeed = 40;    
+let rAF = null;          
+let lastFrameTime = 0;   
 
 // ===== Setup UI =====
 $('fontSize').oninput = e => $('fontSizeVal').textContent = e.target.value + ' px';
@@ -244,8 +239,6 @@ $('startBtn').onclick = async () => {
     video.srcObject = stream;
     video.classList.toggle('back', camFacing === 'environment');
 
-    // Video-Watchdog: falls der Browser die Preview drosselt oder pausiert,
-    // sofort wieder starten. Auch bei Sichtbarkeits-/Fokuswechseln.
     const ensurePlaying = () => {
       if (video.paused || video.readyState < 2) {
         video.play().catch(() => {});
@@ -257,10 +250,8 @@ $('startBtn').onclick = async () => {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) ensurePlaying();
     });
-    // Sicherheitsnetz: alle 2s prüfen
     window._playWatchdog = setInterval(ensurePlaying, 2000);
 
-    // Startposition: Text beginnt auf Lesezeile (Mitte Overlay)
     const overlay = $('textOverlay');
     setScrollY(overlay.clientHeight / 2);
 
@@ -283,37 +274,30 @@ function pickMimeType() {
   mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
 }
 
-// ===== Scroll via Web Animations API (läuft auf Compositor-Thread) =====
-function stopAnim() {
-  if (currentAnim) {
-    // aktuelle Position einfrieren
-    scrollY = getCurrentScrollY();
-    currentAnim.cancel();
-    currentAnim = null;
-  }
-  textScroll.style.transform = `translate3d(0, ${scrollY}px, 0)`;
-}
+// ===== Scroll via requestAnimationFrame (GPU-freundlich) =====
+function scrollLoop(time) {
+  if (!lastFrameTime) lastFrameTime = time;
+  const delta = (time - lastFrameTime) / 1000;
+  lastFrameTime = time;
 
-function getCurrentScrollY() {
-  if (!currentAnim) return scrollY;
-  const elapsed = (performance.now() - animStartTime) / 1000;
-  return animStartY - scrollSpeed * elapsed;
+  scrollY -= scrollSpeed * delta;
+  textScroll.style.transform = `translate3d(0, ${scrollY}px, 0)`;
+
+  rAF = requestAnimationFrame(scrollLoop);
 }
 
 function startAnim() {
-  stopAnim();
-  // Sehr weit nach oben animieren; wir stoppen manuell bei Pause
-  const distance = 100000; // px
-  const durationMs = (distance / scrollSpeed) * 1000;
-  animStartY = scrollY;
-  animStartTime = performance.now();
-  currentAnim = textScroll.animate(
-    [
-      { transform: `translate3d(0, ${scrollY}px, 0)` },
-      { transform: `translate3d(0, ${scrollY - distance}px, 0)` }
-    ],
-    { duration: durationMs, easing: 'linear', fill: 'forwards' }
-  );
+  if (!rAF) {
+    lastFrameTime = 0;
+    rAF = requestAnimationFrame(scrollLoop);
+  }
+}
+
+function stopAnim() {
+  if (rAF) {
+    cancelAnimationFrame(rAF);
+    rAF = null;
+  }
 }
 
 function setScrollY(y) {
@@ -326,10 +310,9 @@ function setScrollY(y) {
 $('speedSlider').oninput = e => {
   scrollSpeed = parseInt(e.target.value);
   $('speedVal').textContent = scrollSpeed;
-  if (isRecording && scrollSpeed > 0) {
-    startAnim(); // mit neuer Geschwindigkeit ab aktueller Position
-  } else {
-    stopAnim();
+  if (isRecording) {
+    if (scrollSpeed > 0) startAnim();
+    else stopAnim();
   }
 };
 
@@ -347,6 +330,7 @@ function startRecording() {
   } catch (e) {
     mediaRecorder = new MediaRecorder(stream);
   }
+  
   const segmentStartY = scrollY;
 
   mediaRecorder.ondataavailable = e => {
@@ -358,9 +342,12 @@ function startRecording() {
     updateUI();
   };
 
-  mediaRecorder.start();
+  // WICHTIG: 1000ms Timeslice verhindert RAM-Überlauf und Einfrieren
+  mediaRecorder.start(1000); 
   isRecording = true;
+  
   if (scrollSpeed > 0) startAnim();
+  
   $('recDot').classList.add('active');
   $('recBtn').textContent = '❚❚ Pause';
   $('recBtn').classList.remove('rec');
@@ -404,7 +391,6 @@ $('finishBtn').onclick = async () => {
   if (window._playWatchdog) { clearInterval(window._playWatchdog); window._playWatchdog = null; }
   stream.getTracks().forEach(t => t.stop());
 
-  // Segmente zusammenfügen (einfache Blob-Konkatenation funktioniert bei webm/mp4 mit gleichem Codec meistens)
   const allBlobs = recordedSegments.map(s => s.blob);
   const finalBlob = new Blob(allBlobs, { type: allBlobs[0].type });
   const url = URL.createObjectURL(finalBlob);
