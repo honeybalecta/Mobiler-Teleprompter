@@ -75,6 +75,8 @@
     text-shadow: 0 2px 6px rgba(0,0,0,0.9);
     white-space: pre-wrap;
     will-change: transform;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
   }
   #readingLine {
     position: absolute; left: 0; right: 0; top: 50%;
@@ -210,10 +212,11 @@ let currentChunks = [];
 let isRecording = false;
 let mimeType = '';
 
-let scrollY = 0;         // aktuelle Text-Position (px, negativ = nach oben gescrollt)
+let scrollY = 0;         // aktuelle Text-Position (px)
 let scrollSpeed = 40;    // px/s
-let lastFrame = 0;
-let rafId = null;
+let currentAnim = null;  // laufende Web Animation
+let animStartY = 0;
+let animStartTime = 0;
 
 // ===== Setup UI =====
 $('fontSize').oninput = e => $('fontSizeVal').textContent = e.target.value + ' px';
@@ -259,13 +262,11 @@ $('startBtn').onclick = async () => {
 
     // Startposition: Text beginnt auf Lesezeile (Mitte Overlay)
     const overlay = $('textOverlay');
-    scrollY = overlay.clientHeight / 2;
-    updateScrollTransform();
+    setScrollY(overlay.clientHeight / 2);
 
     setup.style.display = 'none';
     prompter.style.display = 'block';
     pickMimeType();
-    startScrollLoop();
   } catch (err) {
     alert('Kamera-Zugriff fehlgeschlagen: ' + err.message);
   }
@@ -282,28 +283,54 @@ function pickMimeType() {
   mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
 }
 
-// ===== Scroll Loop =====
-function startScrollLoop() {
-  lastFrame = performance.now();
-  const tick = now => {
-    const dt = (now - lastFrame) / 1000;
-    lastFrame = now;
-    if (isRecording) {
-      scrollY -= scrollSpeed * dt;
-      updateScrollTransform();
-    }
-    rafId = requestAnimationFrame(tick);
-  };
-  rafId = requestAnimationFrame(tick);
+// ===== Scroll via Web Animations API (läuft auf Compositor-Thread) =====
+function stopAnim() {
+  if (currentAnim) {
+    // aktuelle Position einfrieren
+    scrollY = getCurrentScrollY();
+    currentAnim.cancel();
+    currentAnim = null;
+  }
+  textScroll.style.transform = `translate3d(0, ${scrollY}px, 0)`;
 }
-function updateScrollTransform() {
-  textScroll.style.transform = `translateY(${scrollY}px)`;
+
+function getCurrentScrollY() {
+  if (!currentAnim) return scrollY;
+  const elapsed = (performance.now() - animStartTime) / 1000;
+  return animStartY - scrollSpeed * elapsed;
+}
+
+function startAnim() {
+  stopAnim();
+  // Sehr weit nach oben animieren; wir stoppen manuell bei Pause
+  const distance = 100000; // px
+  const durationMs = (distance / scrollSpeed) * 1000;
+  animStartY = scrollY;
+  animStartTime = performance.now();
+  currentAnim = textScroll.animate(
+    [
+      { transform: `translate3d(0, ${scrollY}px, 0)` },
+      { transform: `translate3d(0, ${scrollY - distance}px, 0)` }
+    ],
+    { duration: durationMs, easing: 'linear', fill: 'forwards' }
+  );
+}
+
+function setScrollY(y) {
+  stopAnim();
+  scrollY = y;
+  textScroll.style.transform = `translate3d(0, ${scrollY}px, 0)`;
 }
 
 // ===== Speed control =====
 $('speedSlider').oninput = e => {
   scrollSpeed = parseInt(e.target.value);
   $('speedVal').textContent = scrollSpeed;
+  if (isRecording && scrollSpeed > 0) {
+    startAnim(); // mit neuer Geschwindigkeit ab aktueller Position
+  } else {
+    stopAnim();
+  }
 };
 
 // ===== Recording =====
@@ -333,6 +360,7 @@ function startRecording() {
 
   mediaRecorder.start();
   isRecording = true;
+  if (scrollSpeed > 0) startAnim();
   $('recDot').classList.add('active');
   $('recBtn').textContent = '❚❚ Pause';
   $('recBtn').classList.remove('rec');
@@ -345,6 +373,7 @@ function pauseRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
   }
+  stopAnim();
   isRecording = false;
   $('recDot').classList.remove('active');
   $('recBtn').textContent = '● Weiter';
@@ -364,15 +393,14 @@ $('delBtn').onclick = () => {
   if (recordedSegments.length === 0) return;
   if (!confirm('Letztes Segment verwerfen? Der Text springt zurück zur Stelle vor der letzten Aufnahme.')) return;
   const last = recordedSegments.pop();
-  scrollY = last.textPosAtStart;
-  updateScrollTransform();
+  setScrollY(last.textPosAtStart);
   updateUI();
 };
 
 // ===== Fertig =====
 $('finishBtn').onclick = async () => {
   if (recordedSegments.length === 0) return;
-  cancelAnimationFrame(rafId);
+  stopAnim();
   if (window._playWatchdog) { clearInterval(window._playWatchdog); window._playWatchdog = null; }
   stream.getTracks().forEach(t => t.stop());
 
@@ -403,7 +431,7 @@ $('backBtn').onclick = () => {
 $('restartBtn').onclick = cleanupAndReset;
 
 function cleanupAndReset() {
-  cancelAnimationFrame(rafId);
+  stopAnim();
   if (window._playWatchdog) { clearInterval(window._playWatchdog); window._playWatchdog = null; }
   if (stream) stream.getTracks().forEach(t => t.stop());
   recordedSegments = [];
