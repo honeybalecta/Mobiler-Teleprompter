@@ -2,432 +2,378 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Teleprompter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teleprompter PPTX Generator</title>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@v3.12.0/dist/pptxgen.bundle.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
-
-  /* Setup Screen */
-  #setup {
-    position: fixed; inset: 0; padding: 20px;
-    display: flex; flex-direction: column; gap: 14px;
-    background: #0e0e0e; overflow-y: auto;
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #1a1a1a;
+    color: #f0f0f0;
+    margin: 0;
+    padding: 24px;
+    min-height: 100vh;
   }
-  #setup h1 { font-size: 22px; margin-bottom: 4px; }
-  #setup label { font-size: 13px; color: #aaa; display: block; margin-bottom: 6px; }
-  #setup textarea {
-    width: 100%; min-height: 220px; padding: 12px;
-    background: #1a1a1a; color: #fff; border: 1px solid #333;
-    border-radius: 8px; font-size: 16px; resize: vertical; font-family: inherit;
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 16px; margin-top: 28px; margin-bottom: 8px; color: #ddd; }
+  p.hint { color: #aaa; font-size: 14px; margin-top: 0; margin-bottom: 14px; }
+  textarea {
+    width: 100%;
+    padding: 14px;
+    font-size: 15px;
+    font-family: inherit;
+    background: #2a2a2a;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    border-radius: 8px;
+    resize: vertical;
+    line-height: 1.5;
   }
-  .row { display: flex; gap: 10px; align-items: center; }
-  .row label { margin: 0; flex: 0 0 auto; }
-  .slider-wrap { flex: 1; display: flex; gap: 10px; align-items: center; }
-  input[type=range] { flex: 1; }
-  input[type=number], select {
-    background: #1a1a1a; color: #fff; border: 1px solid #333;
-    border-radius: 6px; padding: 8px; font-size: 15px;
+  #input { min-height: 180px; }
+  #editor { min-height: 260px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; }
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 12px 0;
+    flex-wrap: wrap;
   }
-  .btn {
-    padding: 14px 20px; border-radius: 10px; border: none;
-    font-size: 16px; font-weight: 600; cursor: pointer;
-    background: #e53935; color: #fff;
-  }
-  .btn.secondary { background: #333; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* Prompter Screen */
-  #prompter {
-    position: fixed; inset: 0; display: none;
-    background: #000;
-  }
-  #video {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover;
-    transform: scaleX(-1) translateZ(0);
-    will-change: transform;
-    backface-visibility: hidden;
-  }
-  #video.back { transform: translateZ(0); }
-
-  #textOverlay {
-    position: absolute; left: 0; right: 0; top: 15%; bottom: 25%;
-    overflow: hidden; pointer-events: none;
-    background: rgba(0,0,0,0.35);
-  }
-  #textOverlay::before, #textOverlay::after {
-    content: ''; position: absolute; left: 0; right: 0; height: 40px;
-    pointer-events: none; z-index: 2;
-  }
-  #textOverlay::before {
-    top: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.35), transparent);
-  }
-  #textOverlay::after {
-    bottom: 0; background: linear-gradient(to top, rgba(0,0,0,0.35), transparent);
-  }
-  #textScroll {
-    position: absolute; left: 0; right: 0;
-    padding: 0 24px;
-    font-size: 28px; line-height: 1.5;
+  button {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 11px 20px;
+    font-size: 14px;
     font-weight: 600;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.9);
-    white-space: pre-wrap;
-    will-change: transform;
-    transform: translate3d(0, 0, 0);
-    backface-visibility: hidden;
+    border-radius: 8px;
+    cursor: pointer;
   }
-  #readingLine {
-    position: absolute; left: 0; right: 0; top: 50%;
-    height: 2px; background: rgba(255, 59, 48, 0.6);
-    pointer-events: none;
+  button:hover { background: #2563eb; }
+  button.secondary { background: #4b5563; }
+  button.secondary:hover { background: #374151; }
+  button.success { background: #16a34a; }
+  button.success:hover { background: #15803d; }
+  label { font-size: 13px; color: #ccc; display: flex; align-items: center; gap: 6px; }
+  input[type="text"], input[type="number"] {
+    background: #2a2a2a;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
   }
+  input[type="text"] { width: 180px; }
+  input[type="number"] { width: 70px; }
+  #status { margin-top: 8px; font-size: 13px; color: #9ca3af; min-height: 18px; }
+  .editor-hint { font-size: 12px; color: #888; margin: 6px 0 4px; }
 
-  /* Controls */
-  #topBar {
-    position: absolute; top: 0; left: 0; right: 0;
-    padding: 12px 16px; display: flex; justify-content: space-between;
-    align-items: center; z-index: 10;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+  #presenter {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    padding: 4vh 5vw;
+    cursor: none;
   }
-  #segCount { font-size: 13px; color: #fff; }
-  #recDot {
-    display: inline-block; width: 10px; height: 10px;
-    border-radius: 50%; background: #e53935; margin-right: 6px;
-    animation: pulse 1s infinite; visibility: hidden;
+  #presenter.active { display: flex; }
+  #presenter.show-cursor { cursor: default; }
+  #presenter-current {
+    color: #ffffff;
+    font-size: 6vw;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.25;
+    max-width: 90vw;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   }
-  #recDot.active { visibility: visible; }
-  @keyframes pulse { 50% { opacity: 0.3; } }
-
-  #bottomBar {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    padding: 18px 16px 28px; z-index: 10;
-    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-    display: flex; flex-direction: column; gap: 12px;
+  #presenter-next {
+    color: rgba(255,255,255,0.22);
+    font-size: 2.6vw;
+    font-weight: 400;
+    text-align: center;
+    line-height: 1.4;
+    max-width: 80vw;
+    margin-top: 8vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   }
-  .speed-row {
-    display: flex; align-items: center; gap: 10px;
-    color: #fff; font-size: 13px;
+  #presenter-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 2;
   }
-  .btn-row { display: flex; gap: 10px; justify-content: center; }
-  .ctrl {
-    flex: 1; padding: 14px; border-radius: 10px; border: none;
-    font-size: 15px; font-weight: 600; cursor: pointer;
-    background: rgba(40,40,40,0.85); color: #fff;
+  #presenter.show-cursor #presenter-controls { opacity: 1; }
+  #presenter-controls button {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    padding: 8px 14px;
+    font-size: 13px;
   }
-  .ctrl.rec { background: #e53935; }
-  .ctrl.stop { background: #555; }
-  .ctrl.del { background: rgba(229, 57, 53, 0.4); }
-  .ctrl:disabled { opacity: 0.4; }
-
-  #finish {
-    position: fixed; inset: 0; display: none; flex-direction: column;
-    background: #0e0e0e; padding: 20px; gap: 14px; overflow-y: auto;
+  #presenter-counter {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    color: rgba(255,255,255,0.4);
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 2;
   }
-  #finish video { width: 100%; border-radius: 8px; background: #000; }
-  .info { font-size: 13px; color: #888; }
+  #presenter.show-cursor #presenter-counter { opacity: 1; }
+  .nav-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 33%;
+    z-index: 1;
+  }
+  .nav-zone.left { left: 0; }
+  .nav-zone.right { right: 0; }
 </style>
 </head>
 <body>
+<div class="container">
+  <h1>Teleprompter PPTX Generator</h1>
+  <p class="hint">Text einfügen → analysieren → Folien manuell bearbeiten → Vollbild starten oder als PPTX exportieren.</p>
 
-<div id="setup">
-  <h1>📝 Teleprompter</h1>
-  <div>
-    <label>Text zum Einsprechen</label>
-    <textarea id="scriptText" placeholder="Hier deinen Text einfügen…"></textarea>
+  <h2>1. Originaltext</h2>
+  <textarea id="input" placeholder="Hier deinen Text einfügen..."></textarea>
+
+  <div class="controls">
+    <button id="analyze">Analysieren →</button>
   </div>
-  <div class="row">
-    <label>Kamera:</label>
-    <select id="camSelect">
-      <option value="user">Front</option>
-      <option value="environment">Rück</option>
-    </select>
+
+  <h2>2. Folien-Editor</h2>
+  <p class="editor-hint">Eine Leerzeile trennt zwei Folien. Leerzeile entfernen = Folien zusammenführen. Leerzeile einfügen = Folie aufteilen.</p>
+  <textarea id="editor" placeholder="Klicke oben auf »Analysieren«, um Sätze automatisch in Folien zu zerlegen..."></textarea>
+  <div id="status"></div>
+
+  <div class="controls">
+    <button id="present" class="success">▶ Vollbild starten</button>
+    <button id="download">⬇ PPTX herunterladen</button>
+    <label>Dateiname: <input type="text" id="filename" value="teleprompter"></label>
+    <label>Schriftgröße: <input type="number" id="fontsize" value="54"></label>
   </div>
-  <div class="row">
-    <label>Schriftgröße:</label>
-    <div class="slider-wrap">
-      <input type="range" id="fontSize" min="18" max="48" value="28">
-      <span id="fontSizeVal">28 px</span>
-    </div>
-  </div>
-  <div class="row">
-    <label>Start-Tempo:</label>
-    <div class="slider-wrap">
-      <input type="range" id="startSpeed" min="10" max="120" value="40">
-      <span id="startSpeedVal">40 px/s</span>
-    </div>
-  </div>
-  <button class="btn" id="startBtn">Teleprompter starten</button>
-  <p class="info">Tipp: Tempo kannst du während der Aufnahme jederzeit anpassen. Nach „Pause" kannst du das letzte Segment verwerfen und die Stelle neu einsprechen — der Text springt automatisch zurück.</p>
+  <p class="editor-hint">Im Vollbild: ← / → oder Leertaste zum Navigieren, Esc zum Beenden, Tippen links/rechts für Touch.</p>
 </div>
 
-<div id="prompter">
-  <video id="video" autoplay playsinline muted></video>
-  <div id="textOverlay">
-    <div id="textScroll"></div>
+<div id="presenter">
+  <div class="nav-zone left" id="nav-left"></div>
+  <div class="nav-zone right" id="nav-right"></div>
+  <div id="presenter-current"></div>
+  <div id="presenter-next"></div>
+  <div id="presenter-counter"></div>
+  <div id="presenter-controls">
+    <button class="secondary" id="prev-btn">←</button>
+    <button class="secondary" id="next-btn">→</button>
+    <button class="secondary" id="exit-btn">✕ Beenden</button>
   </div>
-  <div id="readingLine"></div>
-
-  <div id="topBar">
-    <div><span id="recDot"></span><span id="segCount">0 Segmente</span></div>
-    <button class="ctrl" id="backBtn" style="flex:0 0 auto; padding: 8px 14px;">✕</button>
-  </div>
-
-  <div id="bottomBar">
-    <div class="speed-row">
-      <span>Tempo</span>
-      <input type="range" id="speedSlider" min="0" max="150" value="40" style="flex:1;">
-      <span id="speedVal">40</span>
-    </div>
-    <div class="btn-row">
-      <button class="ctrl rec" id="recBtn">● Aufnahme</button>
-      <button class="ctrl del" id="delBtn" disabled>↶ Letztes verwerfen</button>
-      <button class="ctrl stop" id="finishBtn" disabled>✓ Fertig</button>
-    </div>
-  </div>
-</div>
-
-<div id="finish">
-  <h1>✓ Fertig</h1>
-  <video id="previewVideo" controls></video>
-  <button class="btn" id="downloadBtn">Video herunterladen</button>
-  <button class="btn secondary" id="restartBtn">Neu aufnehmen</button>
 </div>
 
 <script>
-// ===== DOM =====
-const $ = id => document.getElementById(id);
-const setup = $('setup'), prompter = $('prompter'), finish = $('finish');
-const video = $('video'), textScroll = $('textScroll');
+const ABBREVIATIONS = new Set([
+  'z.b','d.h','u.a','u.ä','i.d.r','n.chr','v.chr','u.u','z.t','i.a','o.ä','o.g','s.o','s.u',
+  'ca','nr','st','ggf','bzw','usw','etc','mio','mrd','dr','prof','hr','fr','str','bd','bspw',
+  'evtl','inkl','exkl','vgl','sog','jh','jhd','jhdt','mind','max','tel','geb','gest','lt','ggü',
+  'bzgl','urspr','dt','engl','frz','span','ehem','sen','jun','jr','co','gmbh','ag','ev','abs',
+  'art','kap','abb','tab','pkt','ziff','rd','tsd','mwst','zzgl','aufl','hrsg','übers','bearb',
+  'red','allg','bes','desgl','dgl','eigtl','einschl','etw','ff','gem','jew','mtl','nat','od',
+  'pp','resp','rsp','tägl','usf','uvm','va','wö','zb','zt','zzt','nr','sog','geb','verh'
+]);
 
-// ===== State =====
-let stream = null;
-let mediaRecorder = null;
-let recordedSegments = []; 
-let currentChunks = [];
-let isRecording = false;
-let mimeType = '';
+function splitSentences(text) {
+  const cleaned = text.replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n+/g, ' ').trim();
+  if (!cleaned) return [];
 
-let scrollY = 0;         
-let scrollSpeed = 40;    
-let rAF = null;          
-let lastFrameTime = 0;   
+  const sentences = [];
+  let current = '';
 
-// ===== Setup UI =====
-$('fontSize').oninput = e => $('fontSizeVal').textContent = e.target.value + ' px';
-$('startSpeed').oninput = e => $('startSpeedVal').textContent = e.target.value + ' px/s';
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    current += ch;
 
-$('startBtn').onclick = async () => {
-  const text = $('scriptText').value.trim();
-  if (!text) { alert('Bitte Text eingeben.'); return; }
+    if (ch !== '.' && ch !== '!' && ch !== '?' && ch !== '…') continue;
 
-  const fontSize = $('fontSize').value;
-  scrollSpeed = parseInt($('startSpeed').value);
-  const camFacing = $('camSelect').value;
+    // Consume consecutive punctuation (e.g. "?!", "...")
+    let j = i + 1;
+    while (j < cleaned.length && /[.!?…]/.test(cleaned[j])) {
+      current += cleaned[j];
+      j++;
+    }
+    // Consume closing quotes/brackets
+    while (j < cleaned.length && /["»«')\]]/.test(cleaned[j])) {
+      current += cleaned[j];
+      j++;
+    }
 
-  textScroll.textContent = text;
-  textScroll.style.fontSize = fontSize + 'px';
+    const next = cleaned[j] || '';
+    const afterNext = cleaned[j + 1] || '';
+    const prev = cleaned[i - 1] || '';
 
-  $('speedSlider').value = scrollSpeed;
-  $('speedVal').textContent = scrollSpeed;
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: camFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: true
-    });
-    video.srcObject = stream;
-    video.classList.toggle('back', camFacing === 'environment');
-
-    const ensurePlaying = () => {
-      if (video.paused || video.readyState < 2) {
-        video.play().catch(() => {});
+    if (ch === '.') {
+      // Digit before period
+      if (/\d/.test(prev)) {
+        // Pure number continuation: 1.2.2026, 3.000
+        if (/\d/.test(next)) { i = j - 1; continue; }
+        // Ordinal: word before period is purely numeric and next is space + capital
+        const wordMatch = current.slice(0, -1).match(/(\S+)$/);
+        if (wordMatch && /^\d+$/.test(wordMatch[1]) && next === ' ' && /[A-ZÄÖÜa-zäöü]/.test(afterNext)) {
+          i = j - 1; continue;
+        }
       }
-    };
-    video.addEventListener('pause', ensurePlaying);
-    video.addEventListener('stalled', ensurePlaying);
-    video.addEventListener('suspend', ensurePlaying);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) ensurePlaying();
+
+      // Known abbreviation
+      const wordMatch = current.match(/([A-Za-zÄÖÜäöüß.]+)\.$/);
+      if (wordMatch) {
+        const word = wordMatch[1].toLowerCase().replace(/\.+$/, '');
+        if (ABBREVIATIONS.has(word)) { i = j - 1; continue; }
+        if (word.length === 1 && /[a-zäöüß]/.test(word)) { i = j - 1; continue; }
+      }
+
+      // Next char is lowercase letter -> not a sentence end
+      if (next === ' ' && /[a-zäöüß]/.test(afterNext)) { i = j - 1; continue; }
+    }
+
+    sentences.push(current.trim());
+    current = '';
+    i = j - 1;
+  }
+
+  if (current.trim()) sentences.push(current.trim());
+  return sentences;
+}
+
+function getSlidesFromEditor() {
+  const text = document.getElementById('editor').value;
+  return text
+    .split(/\n\s*\n/)
+    .map(s => s.replace(/\s+/g, ' ').trim())
+    .filter(s => s.length > 0);
+}
+
+function updateStatus() {
+  const slides = getSlidesFromEditor();
+  document.getElementById('status').textContent =
+    slides.length ? `${slides.length} Folie${slides.length === 1 ? '' : 'n'}` : '';
+}
+
+document.getElementById('editor').addEventListener('input', updateStatus);
+
+document.getElementById('analyze').addEventListener('click', () => {
+  const text = document.getElementById('input').value;
+  const sentences = splitSentences(text);
+  if (!sentences.length) {
+    document.getElementById('status').textContent = 'Kein Text zum Analysieren gefunden.';
+    return;
+  }
+  document.getElementById('editor').value = sentences.join('\n\n');
+  updateStatus();
+});
+
+const presenter = document.getElementById('presenter');
+const presCurrent = document.getElementById('presenter-current');
+const presNext = document.getElementById('presenter-next');
+const presCounter = document.getElementById('presenter-counter');
+let slides = [];
+let idx = 0;
+let cursorTimeout = null;
+
+function renderSlide() {
+  if (!slides.length) return;
+  presCurrent.textContent = slides[idx];
+  presNext.textContent = slides[idx + 1] || '';
+  presCounter.textContent = `${idx + 1} / ${slides.length}`;
+}
+function nextSlide() { if (idx < slides.length - 1) { idx++; renderSlide(); } }
+function prevSlide() { if (idx > 0) { idx--; renderSlide(); } }
+
+function showCursorTemporarily() {
+  presenter.classList.add('show-cursor');
+  clearTimeout(cursorTimeout);
+  cursorTimeout = setTimeout(() => presenter.classList.remove('show-cursor'), 2500);
+}
+
+function startPresenter() {
+  slides = getSlidesFromEditor();
+  if (!slides.length) {
+    document.getElementById('status').textContent = 'Keine Folien vorhanden – bitte zuerst Text analysieren.';
+    return;
+  }
+  idx = 0;
+  renderSlide();
+  presenter.classList.add('active');
+  if (presenter.requestFullscreen) presenter.requestFullscreen().catch(() => {});
+  showCursorTemporarily();
+}
+
+function exitPresenter() {
+  presenter.classList.remove('active');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
+document.getElementById('present').addEventListener('click', startPresenter);
+document.getElementById('next-btn').addEventListener('click', e => { e.stopPropagation(); nextSlide(); });
+document.getElementById('prev-btn').addEventListener('click', e => { e.stopPropagation(); prevSlide(); });
+document.getElementById('exit-btn').addEventListener('click', e => { e.stopPropagation(); exitPresenter(); });
+document.getElementById('nav-left').addEventListener('click', prevSlide);
+document.getElementById('nav-right').addEventListener('click', nextSlide);
+presenter.addEventListener('mousemove', showCursorTemporarily);
+
+document.addEventListener('keydown', e => {
+  if (!presenter.classList.contains('active')) return;
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); nextSlide(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevSlide(); }
+  else if (e.key === 'Escape') exitPresenter();
+  else if (e.key === 'Home') { idx = 0; renderSlide(); }
+  else if (e.key === 'End') { idx = slides.length - 1; renderSlide(); }
+});
+
+document.getElementById('download').addEventListener('click', async () => {
+  const slideTexts = getSlidesFromEditor();
+  const status = document.getElementById('status');
+  if (!slideTexts.length) { status.textContent = 'Keine Folien zum Exportieren.'; return; }
+  status.textContent = `Generiere ${slideTexts.length} Folien...`;
+
+  const fontSize = parseInt(document.getElementById('fontsize').value, 10) || 54;
+  const filename = (document.getElementById('filename').value || 'teleprompter').replace(/\.pptx$/i, '');
+
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE';
+
+  slideTexts.forEach((sentence, i) => {
+    const slide = pptx.addSlide();
+    slide.background = { color: '000000' };
+    slide.addText(sentence, {
+      x: 0.5, y: 0.5, w: 12.33, h: 4.8,
+      align: 'center', valign: 'middle',
+      fontSize: fontSize, color: 'FFFFFF',
+      fontFace: 'Arial', bold: true, wrap: true,
     });
-    window._playWatchdog = setInterval(ensurePlaying, 2000);
+    const nextText = slideTexts[i + 1];
+    if (nextText) {
+      slide.addText(nextText, {
+        x: 1.0, y: 5.6, w: 11.33, h: 1.6,
+        align: 'center', valign: 'top',
+        fontSize: Math.max(14, Math.round(fontSize * 0.4)),
+        color: '4A4A4A', fontFace: 'Arial', wrap: true,
+      });
+    }
+  });
 
-    const overlay = $('textOverlay');
-    setScrollY(overlay.clientHeight / 2);
-
-    setup.style.display = 'none';
-    prompter.style.display = 'block';
-    pickMimeType();
-  } catch (err) {
-    alert('Kamera-Zugriff fehlgeschlagen: ' + err.message);
-  }
-};
-
-// ===== Mime Type Detection =====
-function pickMimeType() {
-  const candidates = [
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-    'video/mp4'
-  ];
-  mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
-}
-
-// ===== Scroll via requestAnimationFrame (GPU-freundlich) =====
-function scrollLoop(time) {
-  if (!lastFrameTime) lastFrameTime = time;
-  const delta = (time - lastFrameTime) / 1000;
-  lastFrameTime = time;
-
-  scrollY -= scrollSpeed * delta;
-  textScroll.style.transform = `translate3d(0, ${scrollY}px, 0)`;
-
-  rAF = requestAnimationFrame(scrollLoop);
-}
-
-function startAnim() {
-  if (!rAF) {
-    lastFrameTime = 0;
-    rAF = requestAnimationFrame(scrollLoop);
-  }
-}
-
-function stopAnim() {
-  if (rAF) {
-    cancelAnimationFrame(rAF);
-    rAF = null;
-  }
-}
-
-function setScrollY(y) {
-  stopAnim();
-  scrollY = y;
-  textScroll.style.transform = `translate3d(0, ${scrollY}px, 0)`;
-}
-
-// ===== Speed control =====
-$('speedSlider').oninput = e => {
-  scrollSpeed = parseInt(e.target.value);
-  $('speedVal').textContent = scrollSpeed;
-  if (isRecording) {
-    if (scrollSpeed > 0) startAnim();
-    else stopAnim();
-  }
-};
-
-// ===== Recording =====
-$('recBtn').onclick = () => {
-  if (isRecording) pauseRecording();
-  else startRecording();
-};
-
-function startRecording() {
-  currentChunks = [];
-  const opts = mimeType ? { mimeType } : {};
-  try {
-    mediaRecorder = new MediaRecorder(stream, opts);
-  } catch (e) {
-    mediaRecorder = new MediaRecorder(stream);
-  }
-  
-  const segmentStartY = scrollY;
-
-  mediaRecorder.ondataavailable = e => {
-    if (e.data && e.data.size > 0) currentChunks.push(e.data);
-  };
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(currentChunks, { type: mediaRecorder.mimeType || mimeType || 'video/webm' });
-    recordedSegments.push({ blob, textPosAtStart: segmentStartY });
-    updateUI();
-  };
-
-  // WICHTIG: 1000ms Timeslice verhindert RAM-Überlauf und Einfrieren
-  mediaRecorder.start(1000); 
-  isRecording = true;
-  
-  if (scrollSpeed > 0) startAnim();
-  
-  $('recDot').classList.add('active');
-  $('recBtn').textContent = '❚❚ Pause';
-  $('recBtn').classList.remove('rec');
-  $('delBtn').disabled = true;
-  $('finishBtn').disabled = true;
-  $('backBtn').disabled = true;
-}
-
-function pauseRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-  }
-  stopAnim();
-  isRecording = false;
-  $('recDot').classList.remove('active');
-  $('recBtn').textContent = '● Weiter';
-  $('recBtn').classList.add('rec');
-  $('backBtn').disabled = false;
-}
-
-function updateUI() {
-  const n = recordedSegments.length;
-  $('segCount').textContent = n + (n === 1 ? ' Segment' : ' Segmente');
-  $('delBtn').disabled = n === 0 || isRecording;
-  $('finishBtn').disabled = n === 0 || isRecording;
-}
-
-// ===== Letztes Segment verwerfen + Text zurückspringen =====
-$('delBtn').onclick = () => {
-  if (recordedSegments.length === 0) return;
-  if (!confirm('Letztes Segment verwerfen? Der Text springt zurück zur Stelle vor der letzten Aufnahme.')) return;
-  const last = recordedSegments.pop();
-  setScrollY(last.textPosAtStart);
-  updateUI();
-};
-
-// ===== Fertig =====
-$('finishBtn').onclick = async () => {
-  if (recordedSegments.length === 0) return;
-  stopAnim();
-  if (window._playWatchdog) { clearInterval(window._playWatchdog); window._playWatchdog = null; }
-  stream.getTracks().forEach(t => t.stop());
-
-  const allBlobs = recordedSegments.map(s => s.blob);
-  const finalBlob = new Blob(allBlobs, { type: allBlobs[0].type });
-  const url = URL.createObjectURL(finalBlob);
-
-  $('previewVideo').src = url;
-  prompter.style.display = 'none';
-  finish.style.display = 'flex';
-
-  $('downloadBtn').onclick = () => {
-    const a = document.createElement('a');
-    a.href = url;
-    const ext = finalBlob.type.includes('mp4') ? 'mp4' : 'webm';
-    a.download = `teleprompter-${Date.now()}.${ext}`;
-    a.click();
-  };
-};
-
-// ===== Abbrechen / Neustart =====
-$('backBtn').onclick = () => {
-  if (isRecording) return;
-  if (recordedSegments.length > 0 && !confirm('Aufnahme abbrechen? Alle Segmente gehen verloren.')) return;
-  cleanupAndReset();
-};
-$('restartBtn').onclick = cleanupAndReset;
-
-function cleanupAndReset() {
-  stopAnim();
-  if (window._playWatchdog) { clearInterval(window._playWatchdog); window._playWatchdog = null; }
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  recordedSegments = [];
-  isRecording = false;
-  finish.style.display = 'none';
-  prompter.style.display = 'none';
-  setup.style.display = 'flex';
-  $('recDot').classList.remove('active');
-  $('recBtn').textContent = '● Aufnahme';
-}
+  await pptx.writeFile({ fileName: filename + '.pptx' });
+  status.textContent = `Fertig! ${slideTexts.length} Folien exportiert.`;
+});
 </script>
 </body>
 </html>
