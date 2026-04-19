@@ -3,376 +3,404 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Teleprompter PPTX Generator</title>
-<script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@v3.12.0/dist/pptxgen.bundle.js"></script>
+<title>Teleprompter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
 <style>
   * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: #1a1a1a;
     color: #f0f0f0;
-    margin: 0;
-    padding: 24px;
     min-height: 100vh;
   }
-  .container { max-width: 900px; margin: 0 auto; }
-  h1 { font-size: 22px; margin-bottom: 4px; }
-  h2 { font-size: 16px; margin-top: 28px; margin-bottom: 8px; color: #ddd; }
-  p.hint { color: #aaa; font-size: 14px; margin-top: 0; margin-bottom: 14px; }
+
+  /* === Editor === */
+  .editor { max-width: 900px; margin: 0 auto; padding: 24px; }
+  h1 { margin: 0 0 8px 0; font-size: 28px; }
+  .subtitle { color: #999; margin-bottom: 24px; font-size: 14px; }
   textarea {
     width: 100%;
-    padding: 14px;
+    min-height: 260px;
+    padding: 16px;
     font-size: 15px;
+    line-height: 1.5;
     font-family: inherit;
     background: #2a2a2a;
     color: #f0f0f0;
     border: 1px solid #444;
     border-radius: 8px;
     resize: vertical;
-    line-height: 1.5;
   }
-  #input { min-height: 180px; }
-  #editor { min-height: 260px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; }
-  .controls {
+  textarea:focus { outline: none; border-color: #6aa9ff; }
+  .options {
     display: flex;
-    gap: 10px;
+    gap: 20px;
     align-items: center;
-    margin: 12px 0;
+    margin-top: 16px;
     flex-wrap: wrap;
-  }
-  button {
-    background: #3b82f6;
-    color: white;
-    border: none;
-    padding: 11px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  button:hover { background: #2563eb; }
-  button.secondary { background: #4b5563; }
-  button.secondary:hover { background: #374151; }
-  button.success { background: #16a34a; }
-  button.success:hover { background: #15803d; }
-  label { font-size: 13px; color: #ccc; display: flex; align-items: center; gap: 6px; }
-  input[type="text"], input[type="number"] {
+    padding: 12px 16px;
     background: #2a2a2a;
-    color: #f0f0f0;
-    border: 1px solid #444;
     border-radius: 6px;
-    padding: 8px 10px;
-    font-size: 14px;
   }
-  input[type="text"] { width: 180px; }
-  input[type="number"] { width: 70px; }
-  #status { margin-top: 8px; font-size: 13px; color: #9ca3af; min-height: 18px; }
-  .editor-hint { font-size: 12px; color: #888; margin: 6px 0 4px; }
+  .options label {
+    display: flex; gap: 8px; align-items: center; font-size: 14px; color: #ccc;
+  }
+  .options input {
+    padding: 6px 8px; background: #1a1a1a; color: #f0f0f0;
+    border: 1px solid #444; border-radius: 4px; font-size: 14px;
+  }
+  .options input[type="number"] { width: 70px; }
+  .options input[type="text"] { width: 180px; }
+  .controls { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  button {
+    padding: 12px 24px; font-size: 15px; font-weight: 600;
+    background: #4a7fff; color: white; border: none;
+    border-radius: 6px; cursor: pointer; transition: background 0.15s;
+  }
+  button:hover { background: #5a8fff; }
+  button.secondary { background: #3a3a3a; }
+  button.secondary:hover { background: #4a4a4a; }
+  button.primary-big {
+    background: #2ea043; font-size: 17px; padding: 14px 32px;
+  }
+  button.primary-big:hover { background: #3eb053; }
+  .status {
+    margin-top: 16px; padding: 12px 16px; border-radius: 6px;
+    font-size: 14px; display: none;
+  }
+  .status.visible { display: block; }
+  .status.info { background: #1e3a5f; color: #c9e0ff; }
+  .status.success { background: #1e4a2e; color: #c9f0d0; }
+  .status.error { background: #5a1e1e; color: #ffc9c9; }
+  .preview {
+    margin-top: 24px; padding: 16px; background: #2a2a2a;
+    border-radius: 8px; display: none;
+  }
+  .preview.visible { display: block; }
+  .preview h3 { margin: 0 0 12px 0; font-size: 16px; color: #ccc; }
+  .sentence-list {
+    max-height: 300px; overflow-y: auto;
+    background: #1a1a1a; border-radius: 6px; padding: 8px;
+  }
+  .sentence-item {
+    padding: 8px 12px; border-bottom: 1px solid #333;
+    font-size: 14px; line-height: 1.5; cursor: pointer;
+  }
+  .sentence-item:hover { background: #252525; }
+  .sentence-item:last-child { border-bottom: none; }
+  .sentence-num { color: #6aa9ff; font-weight: 600; margin-right: 8px; }
+  footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid #333;
+    font-size: 13px; color: #888; line-height: 1.6;
+  }
 
-  #presenter {
-    position: fixed;
-    inset: 0;
-    background: #000;
-    display: none;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    padding: 4vh 5vw;
-    cursor: none;
+  /* === Präsentationsmodus === */
+  .presenter {
+    position: fixed; inset: 0;
+    background: #000; color: #fff;
+    display: none; align-items: center; justify-content: center;
+    padding: 5vmin; z-index: 1000;
+    user-select: none; -webkit-user-select: none;
   }
-  #presenter.active { display: flex; }
-  #presenter.show-cursor { cursor: default; }
-  #presenter-current {
-    color: #ffffff;
-    font-size: 6vw;
-    font-weight: 700;
-    text-align: center;
-    line-height: 1.25;
-    max-width: 90vw;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  .presenter.active { display: flex; }
+  .slide-text {
+    text-align: center; font-weight: 700; line-height: 1.25;
+    font-family: Arial, sans-serif;
+    max-width: 100%; max-height: 100%;
+    overflow-wrap: break-word;
   }
-  #presenter-next {
-    color: rgba(255,255,255,0.22);
-    font-size: 2.6vw;
-    font-weight: 400;
-    text-align: center;
-    line-height: 1.4;
-    max-width: 80vw;
-    margin-top: 8vh;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  .presenter-ui {
+    position: fixed; bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 12px; align-items: center;
+    background: rgba(30, 30, 30, 0.85);
+    padding: 8px 16px; border-radius: 24px;
+    font-size: 13px; color: #ccc;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
   }
-  #presenter-controls {
-    position: absolute;
-    bottom: 16px;
-    right: 16px;
-    display: flex;
-    gap: 8px;
-    opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 2;
+  .presenter.show-ui .presenter-ui {
+    opacity: 1; pointer-events: auto;
   }
-  #presenter.show-cursor #presenter-controls { opacity: 1; }
-  #presenter-controls button {
-    background: rgba(255,255,255,0.1);
-    backdrop-filter: blur(8px);
-    color: #fff;
-    padding: 8px 14px;
-    font-size: 13px;
+  .presenter-ui button {
+    padding: 6px 12px; font-size: 13px;
+    background: #3a3a3a; border-radius: 4px;
   }
-  #presenter-counter {
-    position: absolute;
-    bottom: 16px;
-    left: 16px;
-    color: rgba(255,255,255,0.4);
-    font-size: 13px;
-    opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 2;
+  .counter {
+    font-variant-numeric: tabular-nums;
+    color: #aaa; min-width: 60px; text-align: center;
   }
-  #presenter.show-cursor #presenter-counter { opacity: 1; }
-  .nav-zone {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 33%;
-    z-index: 1;
-  }
-  .nav-zone.left { left: 0; }
-  .nav-zone.right { right: 0; }
 </style>
 </head>
 <body>
-<div class="container">
-  <h1>Teleprompter PPTX Generator</h1>
-  <p class="hint">Text einfügen → analysieren → Folien manuell bearbeiten → Vollbild starten oder als PPTX exportieren.</p>
 
-  <h2>1. Originaltext</h2>
-  <textarea id="input" placeholder="Hier deinen Text einfügen..."></textarea>
+<div class="editor" id="editor">
+  <h1>Teleprompter</h1>
+  <div class="subtitle">Text einfügen → verarbeiten → direkt präsentieren oder als .pptx herunterladen.</div>
 
-  <div class="controls">
-    <button id="analyze">Analysieren →</button>
+  <textarea id="input" placeholder="Hier den gesamten Text einfügen. Das Tool trennt automatisch an Satzenden (. ! ?) und ignoriert gängige Abkürzungen (z.B., Dr., Mio. usw.)."></textarea>
+
+  <div class="options">
+    <label>
+      Schriftgröße Präsentation (vw):
+      <input type="number" id="fontSize" value="7" min="2" max="20" step="0.5">
+    </label>
+    <label>
+      Dateiname (.pptx):
+      <input type="text" id="filename" value="teleprompter">
+    </label>
   </div>
 
-  <h2>2. Folien-Editor</h2>
-  <p class="editor-hint">Eine Leerzeile trennt zwei Folien. Leerzeile entfernen = Folien zusammenführen. Leerzeile einfügen = Folie aufteilen.</p>
-  <textarea id="editor" placeholder="Klicke oben auf »Analysieren«, um Sätze automatisch in Folien zu zerlegen..."></textarea>
-  <div id="status"></div>
-
   <div class="controls">
-    <button id="present" class="success">▶ Vollbild starten</button>
-    <button id="download">⬇ PPTX herunterladen</button>
-    <label>Dateiname: <input type="text" id="filename" value="teleprompter"></label>
-    <label>Schriftgröße: <input type="number" id="fontsize" value="54"></label>
+    <button id="presentBtn" class="primary-big">▶ Präsentieren</button>
+    <button id="downloadBtn">Als .pptx herunterladen</button>
+    <button id="previewBtn" class="secondary">Nur Vorschau</button>
+    <button id="clearBtn" class="secondary">Leeren</button>
   </div>
-  <p class="editor-hint">Im Vollbild: ← / → oder Leertaste zum Navigieren, Esc zum Beenden, Tippen links/rechts für Touch.</p>
+
+  <div id="status" class="status"></div>
+
+  <div id="preview" class="preview">
+    <h3><span id="sentenceCount">0</span> Sätze erkannt (klicken = an dieser Stelle präsentieren):</h3>
+    <div id="sentenceList" class="sentence-list"></div>
+  </div>
+
+  <footer>
+    <strong>Steuerung in der Präsentation:</strong><br>
+    • <strong>Satsuki CGD001 / andere BT-Presenter:</strong> Ring sendet Pfeiltasten — Klick wechselt Folien automatisch.<br>
+    • <strong>Tastatur:</strong> → / ↓ / Leertaste / Bild↓ = vor &nbsp;|&nbsp; ← / ↑ / Bild↑ = zurück &nbsp;|&nbsp; Pos1 / Ende = erste/letzte Folie &nbsp;|&nbsp; Esc = beenden<br>
+    • <strong>Touch (Tablet):</strong> rechte Bildhälfte = vor, linke = zurück, Wisch nach oben = beenden<br>
+    • Menü unten erscheint per Mausbewegung oder Tap.
+  </footer>
 </div>
 
-<div id="presenter">
-  <div class="nav-zone left" id="nav-left"></div>
-  <div class="nav-zone right" id="nav-right"></div>
-  <div id="presenter-current"></div>
-  <div id="presenter-next"></div>
-  <div id="presenter-counter"></div>
-  <div id="presenter-controls">
-    <button class="secondary" id="prev-btn">←</button>
-    <button class="secondary" id="next-btn">→</button>
-    <button class="secondary" id="exit-btn">✕ Beenden</button>
+<div class="presenter" id="presenter">
+  <div class="slide-text" id="slideText"></div>
+  <div class="presenter-ui">
+    <button id="prevBtn">◀</button>
+    <span class="counter" id="counter">1 / 1</span>
+    <button id="nextBtn">▶</button>
+    <button id="exitBtn">Beenden</button>
   </div>
 </div>
 
 <script>
-const ABBREVIATIONS = new Set([
-  'z.b','d.h','u.a','u.ä','i.d.r','n.chr','v.chr','u.u','z.t','i.a','o.ä','o.g','s.o','s.u',
-  'ca','nr','st','ggf','bzw','usw','etc','mio','mrd','dr','prof','hr','fr','str','bd','bspw',
-  'evtl','inkl','exkl','vgl','sog','jh','jhd','jhdt','mind','max','tel','geb','gest','lt','ggü',
-  'bzgl','urspr','dt','engl','frz','span','ehem','sen','jun','jr','co','gmbh','ag','ev','abs',
-  'art','kap','abb','tab','pkt','ziff','rd','tsd','mwst','zzgl','aufl','hrsg','übers','bearb',
-  'red','allg','bes','desgl','dgl','eigtl','einschl','etw','ff','gem','jew','mtl','nat','od',
-  'pp','resp','rsp','tägl','usf','uvm','va','wö','zb','zt','zzt','nr','sog','geb','verh'
-]);
+// === Satz-Segmentierung ===
+const ABBREVIATIONS = [
+  'z.B', 'z. B', 'bzw', 'bzgl', 'ca', 'd.h', 'd. h', 'etc', 'evtl', 'ggf',
+  'i.d.R', 'i. d. R', 'inkl', 'o.Ä', 'o. Ä', 's.o', 's. o', 's.u', 's. u',
+  'u.a', 'u. a', 'u.U', 'u. U', 'usw', 'u.v.m', 'vgl', 'z.T', 'z. T',
+  'Dr', 'Prof', 'Hr', 'Fr', 'Nr', 'Mio', 'Mrd', 'Tsd', 'St', 'Bd',
+  'Jh', 'Jhd', 'Jhdt', 'Mag', 'Dipl', 'Abs', 'Art', 'Kap', 'S',
+  'Mo', 'Di', 'Mi', 'Do', 'Sa', 'So',
+  'Jan', 'Feb', 'Mrz', 'Apr', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'
+];
 
-function splitSentences(text) {
-  const cleaned = text.replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n+/g, ' ').trim();
-  if (!cleaned) return [];
+function segmentSentences(text) {
+  if (!text || !text.trim()) return [];
+  let working = text.replace(/\s+/g, ' ').trim();
+  const PH = '\u0001';
+  for (const abbr of ABBREVIATIONS) {
+    const escaped = abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(^|[\\s(«"\'])(' + escaped + ')\\.', 'g');
+    working = working.replace(re, (m, pre, word) => pre + word + PH);
+  }
+  working = working.replace(/(\d)\.(?=\s*[a-zäöüß])/g, '$1' + PH);
 
   const sentences = [];
-  let current = '';
-
-  for (let i = 0; i < cleaned.length; i++) {
-    const ch = cleaned[i];
-    current += ch;
-
-    if (ch !== '.' && ch !== '!' && ch !== '?' && ch !== '…') continue;
-
-    // Consume consecutive punctuation (e.g. "?!", "...")
-    let j = i + 1;
-    while (j < cleaned.length && /[.!?…]/.test(cleaned[j])) {
-      current += cleaned[j];
-      j++;
-    }
-    // Consume closing quotes/brackets
-    while (j < cleaned.length && /["»«')\]]/.test(cleaned[j])) {
-      current += cleaned[j];
-      j++;
-    }
-
-    const next = cleaned[j] || '';
-    const afterNext = cleaned[j + 1] || '';
-    const prev = cleaned[i - 1] || '';
-
-    if (ch === '.') {
-      // Digit before period
-      if (/\d/.test(prev)) {
-        // Pure number continuation: 1.2.2026, 3.000
-        if (/\d/.test(next)) { i = j - 1; continue; }
-        // Ordinal: word before period is purely numeric and next is space + capital
-        const wordMatch = current.slice(0, -1).match(/(\S+)$/);
-        if (wordMatch && /^\d+$/.test(wordMatch[1]) && next === ' ' && /[A-ZÄÖÜa-zäöü]/.test(afterNext)) {
-          i = j - 1; continue;
-        }
-      }
-
-      // Known abbreviation
-      const wordMatch = current.match(/([A-Za-zÄÖÜäöüß.]+)\.$/);
-      if (wordMatch) {
-        const word = wordMatch[1].toLowerCase().replace(/\.+$/, '');
-        if (ABBREVIATIONS.has(word)) { i = j - 1; continue; }
-        if (word.length === 1 && /[a-zäöüß]/.test(word)) { i = j - 1; continue; }
-      }
-
-      // Next char is lowercase letter -> not a sentence end
-      if (next === ' ' && /[a-zäöüß]/.test(afterNext)) { i = j - 1; continue; }
-    }
-
-    sentences.push(current.trim());
-    current = '';
-    i = j - 1;
+  const re = /[^.!?]+[.!?]+["'»)\]]*(?=\s+[A-ZÄÖÜ]|\s*$)/g;
+  let m, lastEnd = 0;
+  while ((m = re.exec(working)) !== null) {
+    const s = m[0].trim().replace(new RegExp(PH, 'g'), '.');
+    if (s) sentences.push(s);
+    lastEnd = re.lastIndex;
   }
-
-  if (current.trim()) sentences.push(current.trim());
+  const rest = working.slice(lastEnd).replace(new RegExp(PH, 'g'), '.').trim();
+  if (rest) sentences.push(rest);
+  if (sentences.length === 0) {
+    const cleaned = working.replace(new RegExp(PH, 'g'), '.').trim();
+    if (cleaned) sentences.push(cleaned);
+  }
   return sentences;
 }
 
-function getSlidesFromEditor() {
-  const text = document.getElementById('editor').value;
-  return text
-    .split(/\n\s*\n/)
-    .map(s => s.replace(/\s+/g, ' ').trim())
-    .filter(s => s.length > 0);
+// === UI ===
+function showStatus(msg, type = 'info') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status visible ' + type;
+}
+function hideStatus() { document.getElementById('status').className = 'status'; }
+
+function renderPreview(sentences) {
+  const list = document.getElementById('sentenceList');
+  document.getElementById('sentenceCount').textContent = sentences.length;
+  list.innerHTML = '';
+  sentences.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'sentence-item';
+    div.innerHTML = '<span class="sentence-num">' + (i + 1) + '.</span>' +
+                    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    div.addEventListener('click', () => startPresentation(sentences, i));
+    list.appendChild(div);
+  });
+  document.getElementById('preview').className = 'preview visible';
 }
 
-function updateStatus() {
-  const slides = getSlidesFromEditor();
-  document.getElementById('status').textContent =
-    slides.length ? `${slides.length} Folie${slides.length === 1 ? '' : 'n'}` : '';
-}
-
-document.getElementById('editor').addEventListener('input', updateStatus);
-
-document.getElementById('analyze').addEventListener('click', () => {
+function getSentencesFromInput() {
   const text = document.getElementById('input').value;
-  const sentences = splitSentences(text);
-  if (!sentences.length) {
-    document.getElementById('status').textContent = 'Kein Text zum Analysieren gefunden.';
-    return;
-  }
-  document.getElementById('editor').value = sentences.join('\n\n');
-  updateStatus();
-});
+  if (!text.trim()) { showStatus('Bitte zuerst Text einfügen.', 'error'); return null; }
+  const sentences = segmentSentences(text);
+  if (sentences.length === 0) { showStatus('Keine Sätze erkannt.', 'error'); return null; }
+  return sentences;
+}
 
-const presenter = document.getElementById('presenter');
-const presCurrent = document.getElementById('presenter-current');
-const presNext = document.getElementById('presenter-next');
-const presCounter = document.getElementById('presenter-counter');
-let slides = [];
-let idx = 0;
-let cursorTimeout = null;
+// === Präsentation ===
+let currentSentences = [];
+let currentIndex = 0;
+let uiTimeout = null;
+
+function startPresentation(sentences, startIndex = 0) {
+  currentSentences = sentences;
+  currentIndex = startIndex;
+  const presenter = document.getElementById('presenter');
+  presenter.classList.add('active');
+
+  const fs = parseFloat(document.getElementById('fontSize').value) || 7;
+  document.getElementById('slideText').style.fontSize = fs + 'vw';
+
+  renderSlide();
+
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req) { try { req.call(el).catch(() => {}); } catch (e) {} }
+
+  flashUI();
+}
+
+function exitPresentation() {
+  document.getElementById('presenter').classList.remove('active', 'show-ui');
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) { try { exit.call(document).catch(() => {}); } catch (e) {} }
+  }
+}
 
 function renderSlide() {
-  if (!slides.length) return;
-  presCurrent.textContent = slides[idx];
-  presNext.textContent = slides[idx + 1] || '';
-  presCounter.textContent = `${idx + 1} / ${slides.length}`;
-}
-function nextSlide() { if (idx < slides.length - 1) { idx++; renderSlide(); } }
-function prevSlide() { if (idx > 0) { idx--; renderSlide(); } }
-
-function showCursorTemporarily() {
-  presenter.classList.add('show-cursor');
-  clearTimeout(cursorTimeout);
-  cursorTimeout = setTimeout(() => presenter.classList.remove('show-cursor'), 2500);
+  if (!currentSentences.length) return;
+  document.getElementById('slideText').textContent = currentSentences[currentIndex];
+  document.getElementById('counter').textContent =
+    (currentIndex + 1) + ' / ' + currentSentences.length;
 }
 
-function startPresenter() {
-  slides = getSlidesFromEditor();
-  if (!slides.length) {
-    document.getElementById('status').textContent = 'Keine Folien vorhanden – bitte zuerst Text analysieren.';
-    return;
+function nextSlide() { if (currentIndex < currentSentences.length - 1) { currentIndex++; renderSlide(); } }
+function prevSlide() { if (currentIndex > 0) { currentIndex--; renderSlide(); } }
+function firstSlide() { currentIndex = 0; renderSlide(); }
+function lastSlide() { currentIndex = currentSentences.length - 1; renderSlide(); }
+
+function flashUI() {
+  const p = document.getElementById('presenter');
+  p.classList.add('show-ui');
+  if (uiTimeout) clearTimeout(uiTimeout);
+  uiTimeout = setTimeout(() => p.classList.remove('show-ui'), 2500);
+}
+
+// Tastatur (inkl. BT-Presenter-Codes)
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('presenter').classList.contains('active')) return;
+  switch (e.key) {
+    case 'ArrowRight': case 'ArrowDown': case 'PageDown':
+    case ' ': case 'Enter':
+      e.preventDefault(); nextSlide(); break;
+    case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+    case 'Backspace':
+      e.preventDefault(); prevSlide(); break;
+    case 'Home': e.preventDefault(); firstSlide(); break;
+    case 'End': e.preventDefault(); lastSlide(); break;
+    case 'Escape': exitPresentation(); break;
   }
-  idx = 0;
-  renderSlide();
-  presenter.classList.add('active');
-  if (presenter.requestFullscreen) presenter.requestFullscreen().catch(() => {});
-  showCursorTemporarily();
-}
-
-function exitPresenter() {
-  presenter.classList.remove('active');
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-}
-
-document.getElementById('present').addEventListener('click', startPresenter);
-document.getElementById('next-btn').addEventListener('click', e => { e.stopPropagation(); nextSlide(); });
-document.getElementById('prev-btn').addEventListener('click', e => { e.stopPropagation(); prevSlide(); });
-document.getElementById('exit-btn').addEventListener('click', e => { e.stopPropagation(); exitPresenter(); });
-document.getElementById('nav-left').addEventListener('click', prevSlide);
-document.getElementById('nav-right').addEventListener('click', nextSlide);
-presenter.addEventListener('mousemove', showCursorTemporarily);
-
-document.addEventListener('keydown', e => {
-  if (!presenter.classList.contains('active')) return;
-  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); nextSlide(); }
-  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevSlide(); }
-  else if (e.key === 'Escape') exitPresenter();
-  else if (e.key === 'Home') { idx = 0; renderSlide(); }
-  else if (e.key === 'End') { idx = slides.length - 1; renderSlide(); }
 });
 
-document.getElementById('download').addEventListener('click', async () => {
-  const slideTexts = getSlidesFromEditor();
-  const status = document.getElementById('status');
-  if (!slideTexts.length) { status.textContent = 'Keine Folien zum Exportieren.'; return; }
-  status.textContent = `Generiere ${slideTexts.length} Folien...`;
+// Klick/Touch
+document.getElementById('presenter').addEventListener('click', (e) => {
+  if (e.target.closest('.presenter-ui')) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  if (x > rect.width / 2) nextSlide(); else prevSlide();
+  flashUI();
+});
 
-  const fontSize = parseInt(document.getElementById('fontsize').value, 10) || 54;
-  const filename = (document.getElementById('filename').value || 'teleprompter').replace(/\.pptx$/i, '');
+let touchStartY = null;
+document.getElementById('presenter').addEventListener('touchstart', (e) => {
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+document.getElementById('presenter').addEventListener('touchend', (e) => {
+  if (touchStartY === null) return;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (dy < -150) exitPresentation();
+  touchStartY = null;
+}, { passive: true });
 
+document.getElementById('presenter').addEventListener('mousemove', flashUI);
+
+document.getElementById('prevBtn').addEventListener('click', (e) => { e.stopPropagation(); prevSlide(); flashUI(); });
+document.getElementById('nextBtn').addEventListener('click', (e) => { e.stopPropagation(); nextSlide(); flashUI(); });
+document.getElementById('exitBtn').addEventListener('click', (e) => { e.stopPropagation(); exitPresentation(); });
+
+// === PPTX ===
+async function generatePptx(sentences, filename) {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
-
-  slideTexts.forEach((sentence, i) => {
-    const slide = pptx.addSlide();
-    slide.background = { color: '000000' };
-    slide.addText(sentence, {
-      x: 0.5, y: 0.5, w: 12.33, h: 4.8,
-      align: 'center', valign: 'middle',
-      fontSize: fontSize, color: 'FFFFFF',
-      fontFace: 'Arial', bold: true, wrap: true,
+  pptx.defineSlideMaster({ title: 'BLACK', background: { color: '000000' } });
+  sentences.forEach(text => {
+    const slide = pptx.addSlide({ masterName: 'BLACK' });
+    slide.addText(text, {
+      x: 0.5, y: 0.5, w: 12.333, h: 6.5,
+      fontSize: 54, fontFace: 'Arial', color: 'FFFFFF',
+      bold: true, align: 'center', valign: 'middle', fit: 'shrink'
     });
-    const nextText = slideTexts[i + 1];
-    if (nextText) {
-      slide.addText(nextText, {
-        x: 1.0, y: 5.6, w: 11.33, h: 1.6,
-        align: 'center', valign: 'top',
-        fontSize: Math.max(14, Math.round(fontSize * 0.4)),
-        color: '4A4A4A', fontFace: 'Arial', wrap: true,
-      });
-    }
   });
+  return pptx.writeFile({ fileName: filename + '.pptx' });
+}
 
-  await pptx.writeFile({ fileName: filename + '.pptx' });
-  status.textContent = `Fertig! ${slideTexts.length} Folien exportiert.`;
+// === Buttons ===
+document.getElementById('presentBtn').addEventListener('click', () => {
+  hideStatus();
+  const sentences = getSentencesFromInput();
+  if (!sentences) return;
+  renderPreview(sentences);
+  startPresentation(sentences, 0);
+});
+
+document.getElementById('downloadBtn').addEventListener('click', async () => {
+  hideStatus();
+  const sentences = getSentencesFromInput();
+  if (!sentences) return;
+  renderPreview(sentences);
+  const filename = (document.getElementById('filename').value || 'teleprompter').trim();
+  showStatus('Erstelle Präsentation mit ' + sentences.length + ' Folien …', 'info');
+  try {
+    await generatePptx(sentences, filename);
+    showStatus('Fertig — ' + sentences.length + ' Folien als ' + filename + '.pptx heruntergeladen.', 'success');
+  } catch (err) {
+    console.error(err);
+    showStatus('Fehler: ' + err.message, 'error');
+  }
+});
+
+document.getElementById('previewBtn').addEventListener('click', () => {
+  hideStatus();
+  const sentences = getSentencesFromInput();
+  if (!sentences) return;
+  renderPreview(sentences);
+  showStatus(sentences.length + ' Sätze erkannt.', 'info');
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('input').value = '';
+  document.getElementById('preview').className = 'preview';
+  hideStatus();
 });
 </script>
 </body>
