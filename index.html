@@ -81,6 +81,7 @@
     padding: 4vh 5vw;
     cursor: none;
   }
+  #presenter:focus { outline: none; }
   #presenter.active { display: flex; }
   #presenter.show-cursor { cursor: default; }
   #presenter-current {
@@ -165,10 +166,10 @@
     <label>Dateiname: <input type="text" id="filename" value="teleprompter"></label>
     <label>Schriftgröße: <input type="number" id="fontsize" value="54"></label>
   </div>
-  <p class="editor-hint">Im Vollbild: ← / → oder Leertaste zum Navigieren, Esc zum Beenden, Tippen links/rechts für Touch.</p>
+  <p class="editor-hint">Im Vollbild: Pfeiltasten, Leertaste, Enter, PageUp/Down oder Bluetooth-Presenter zum Navigieren. Esc beendet. Debug ist beim Start AN (zeigt oben den erkannten Tastencode) – mit »D« ein/ausschalten.</p>
 </div>
 
-<div id="presenter">
+<div id="presenter" tabindex="0">
   <div class="nav-zone left" id="nav-left"></div>
   <div class="nav-zone right" id="nav-right"></div>
   <div id="presenter-current"></div>
@@ -313,7 +314,10 @@ function startPresenter() {
   idx = 0;
   renderSlide();
   presenter.classList.add('active');
-  if (presenter.requestFullscreen) presenter.requestFullscreen().catch(() => {});
+  presenter.focus(); // Critical for Android: element must have focus for key events
+  if (presenter.requestFullscreen) {
+    presenter.requestFullscreen().then(() => presenter.focus()).catch(() => {});
+  }
   showCursorTemporarily();
 }
 
@@ -323,20 +327,115 @@ function exitPresenter() {
 }
 
 document.getElementById('present').addEventListener('click', startPresenter);
-document.getElementById('next-btn').addEventListener('click', e => { e.stopPropagation(); nextSlide(); });
-document.getElementById('prev-btn').addEventListener('click', e => { e.stopPropagation(); prevSlide(); });
+document.getElementById('next-btn').addEventListener('click', e => { e.stopPropagation(); nextSlide(); presenter.focus(); });
+document.getElementById('prev-btn').addEventListener('click', e => { e.stopPropagation(); prevSlide(); presenter.focus(); });
 document.getElementById('exit-btn').addEventListener('click', e => { e.stopPropagation(); exitPresenter(); });
-document.getElementById('nav-left').addEventListener('click', prevSlide);
-document.getElementById('nav-right').addEventListener('click', nextSlide);
+document.getElementById('nav-left').addEventListener('click', () => { prevSlide(); presenter.focus(); });
+document.getElementById('nav-right').addEventListener('click', () => { nextSlide(); presenter.focus(); });
 presenter.addEventListener('mousemove', showCursorTemporarily);
+// Re-focus on any touch so BT presenter keeps working after screen tap
+presenter.addEventListener('touchend', () => presenter.focus());
+// Re-focus after fullscreen change (Android sometimes drops focus)
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement === presenter) presenter.focus();
+});
 
-document.addEventListener('keydown', e => {
+// --- Presenter key handling (robust for Android + Bluetooth HID) ---
+
+// By key name (desktop / some Android)
+const NEXT_KEYS = new Set([
+  'ArrowRight','ArrowDown',' ','PageDown','Enter','F5','n','N',
+]);
+const PREV_KEYS = new Set([
+  'ArrowLeft','ArrowUp','PageUp','Backspace','p','P',
+]);
+
+// By keyCode (Android Bluetooth fallback – e.key is often "Unidentified")
+// 39=Right 40=Down 32=Space 34=PageDown 13=Enter 116=F5
+// 24=VolumeUp (some presenters!) 175=MediaNext
+const NEXT_CODES = new Set([39, 40, 32, 34, 13, 116, 24, 175]);
+// 37=Left 38=Up 33=PageUp 25=VolumeDown 176=MediaPrev 8=Backspace
+const PREV_CODES = new Set([37, 38, 33, 25, 176, 8]);
+
+// Debug overlay – ON by default for first session, toggle with "d"
+let debugMode = true;
+let debugTimeout = null;
+const debugEl = document.createElement('div');
+debugEl.id = 'debug-key';
+Object.assign(debugEl.style, {
+  position:'absolute', top:'16px', left:'50%', transform:'translateX(-50%)',
+  background:'rgba(255,255,255,0.15)', backdropFilter:'blur(6px)',
+  color:'#fff', padding:'8px 20px', borderRadius:'8px',
+  fontSize:'14px', fontFamily:'monospace', zIndex:'10',
+  opacity:'0', transition:'opacity 0.2s', pointerEvents:'none',
+  maxWidth:'90vw', textAlign:'center',
+});
+presenter.appendChild(debugEl);
+
+function flashDebug(text) {
+  if (!debugMode) return;
+  debugEl.textContent = text;
+  debugEl.style.opacity = '1';
+  clearTimeout(debugTimeout);
+  debugTimeout = setTimeout(() => debugEl.style.opacity = '0', 2500);
+}
+
+function handlePresenterInput(e) {
   if (!presenter.classList.contains('active')) return;
-  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); nextSlide(); }
-  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevSlide(); }
-  else if (e.key === 'Escape') exitPresenter();
-  else if (e.key === 'Home') { idx = 0; renderSlide(); }
-  else if (e.key === 'End') { idx = slides.length - 1; renderSlide(); }
+
+  const key = e.key || '';
+  const code = e.keyCode || 0;
+
+  // Toggle debug with "d"
+  if (key === 'd' || key === 'D') {
+    debugMode = !debugMode;
+    flashDebug(debugMode ? 'Debug ON — drücke Presenter-Taste' : 'Debug OFF');
+    if (!debugMode) setTimeout(() => debugEl.style.opacity = '0', 800);
+    return;
+  }
+
+  flashDebug(`key="${key}" code="${e.code}" keyCode=${code}`);
+
+  // Determine action: try key name first, then keyCode fallback
+  let action = null;
+  if (NEXT_KEYS.has(key) || NEXT_CODES.has(code)) action = 'next';
+  else if (PREV_KEYS.has(key) || PREV_CODES.has(code)) action = 'prev';
+  else if (key === 'Escape' || code === 27) action = 'exit';
+  else if (key === 'Home' || code === 36) action = 'home';
+  else if (key === 'End' || code === 35) action = 'end';
+
+  // Catch-all: truly unknown key → treat as "next" (most presenters have one big button)
+  if (!action && key === 'Unidentified' && code > 0) {
+    action = 'next';
+    flashDebug(`Unbekannt (keyCode=${code}) → nächste Folie`);
+  }
+
+  if (action) e.preventDefault();
+  if (action === 'next') nextSlide();
+  else if (action === 'prev') prevSlide();
+  else if (action === 'exit') exitPresenter();
+  else if (action === 'home') { idx = 0; renderSlide(); }
+  else if (action === 'end') { idx = slides.length - 1; renderSlide(); }
+}
+
+// Listen on BOTH keydown and keyup – some Android BT devices only fire one
+document.addEventListener('keydown', handlePresenterInput);
+
+// Some BT presenters on Android fire only 'keyup' – catch that too,
+// but debounce to avoid double-triggers
+let lastAction = 0;
+document.addEventListener('keyup', e => {
+  if (!presenter.classList.contains('active')) return;
+  const now = Date.now();
+  if (now - lastAction < 300) return; // debounce
+  const key = e.key || '';
+  const code = e.keyCode || 0;
+  if (NEXT_KEYS.has(key) || NEXT_CODES.has(code) ||
+      PREV_KEYS.has(key) || PREV_CODES.has(code) ||
+      key === 'Unidentified') {
+    lastAction = now;
+    handlePresenterInput(e);
+  }
 });
 
 document.getElementById('download').addEventListener('click', async () => {
